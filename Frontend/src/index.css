@@ -1,0 +1,57 @@
+:root {
+  --text: #111827;
+  --text-h: #000000;
+  --bg: #f9fafb;
+  --border: #e5e7eb;
+  --card-bg: #ffffff;
+
+  --accent: #6366f1;
+  --danger: #ef4444;
+  --success: #22c55e;
+
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  font-family: system-ui, Arial, sans-serif;
+  color: var(--text);
+  background-color: var(--bg);
+
+  /*  Force light mode */
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+}
+
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Headings */
+h1, h2, h3 {
+  color: var(--text-h);
+  margin: 0;
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Inputs */
+input, select {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+* {
+  box-sizing: border-box;
+}
