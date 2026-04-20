@@ -37,7 +37,46 @@ const addTransaction = async (req, res) => {
 
 const getTransactions = async (req, res) => {
   try {
-    const data = await Transaction.find({ userId: req.user }).sort({ createdAt: -1 });
+   const {
+      type,
+      category,
+      from,
+      to,
+    } = req.query;
+
+    const filters = { userId: req.user };
+
+    if (type && ["income", "expense"].includes(type)) {
+      filters.type = type;
+    }
+
+    if (category && category.trim()) {
+      filters.category = new RegExp(`^${category.trim()}$`, "i");
+    }
+
+    if (from || to) {
+      filters.createdAt = {};
+
+      if (from) {
+        const fromDate = new Date(from);
+        if (Number.isNaN(fromDate.getTime())) {
+          return sendError(res, 400, "VALIDATION_ERROR", "Invalid from date");
+        }
+        filters.createdAt.$gte = fromDate;
+      }
+
+      if (to) {
+        const toDate = new Date(to);
+        if (Number.isNaN(toDate.getTime())) {
+          return sendError(res, 400, "VALIDATION_ERROR", "Invalid to date");
+        }
+
+        toDate.setHours(23, 59, 59, 999);
+        filters.createdAt.$lte = toDate;
+      }
+    }
+
+    const data = await Transaction.find(filters).sort({ createdAt: -1 });
 
     res.json(data);
   } catch (err) {
