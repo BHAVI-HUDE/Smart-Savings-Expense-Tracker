@@ -1,68 +1,71 @@
 const Transaction = require("../models/Transaction");
 const mongoose = require("mongoose");
+const sendError = require("../utils/sendError");
 
-// Add
 const addTransaction = async (req, res) => {
   try {
-    const { amount, type, category, notes } = req.body;
-    const parsedAmount = Number(amount);
+    const amount = Number(req.body.amount);
+    const type = String(req.body.type || "").trim().toLowerCase();
+    const category = String(req.body.category || "").trim();
+    const notes = String(req.body.notes || "").trim();
 
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ message: "Amount must be a positive number" });
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Amount must be a positive number");
     }
 
-    if (!["income", "expense"].includes(type)) {
-      return res.status(400).json({ message: "Type must be either income or expense" });
+    if (!type || !["income", "expense"].includes(type)) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Type must be either income or expense");
     }
 
-    if (!category || !String(category).trim()) {
-      return res.status(400).json({ message: "Category is required" });
+    if (!category) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Category is required");
     }
 
     const transaction = await Transaction.create({
       userId: req.user,
-      amount: parsedAmount,
+      amount,
       type,
-      category: String(category).trim(),
+      category,
       notes,
     });
 
     res.status(201).json(transaction);
   } catch (err) {
     console.error("Add transaction error:", err);
-    res.status(500).json({ message: "Server error" });
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
   }
 };
 
-// Get
 const getTransactions = async (req, res) => {
   try {
-    const data = await Transaction.find({ userId: req.user })
-      .sort({ createdAt: -1 });
+    const data = await Transaction.find({ userId: req.user }).sort({ createdAt: -1 });
 
     res.json(data);
   } catch (err) {
     console.error("Get transactions error:", err);
-    res.status(500).json({ message: "Server error" });
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
   }
 };
 
-// Delete
 const deleteTransaction = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Invalid transaction id");
+    }
+
     const deleted = await Transaction.findOneAndDelete({
       _id: req.params.id,
       userId: req.user,
     });
 
     if (!deleted) {
-      return res.status(404).json({ message: "Transaction not found" });
+      return sendError(res, 404, "TRANSACTION_NOT_FOUND", "Transaction not found");
     }
 
     res.json({ message: "Deleted" });
   } catch (err) {
     console.error("Delete transaction error:", err);
-    res.status(500).json({ message: "Server error" });
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
   }
 };
 
@@ -78,7 +81,7 @@ const getSummary = async (req, res) => {
       },
     ]);
 
-     const income = totals.find((item) => item._id === "income")?.total || 0;
+    const income = totals.find((item) => item._id === "income")?.total || 0;
     const expense = totals.find((item) => item._id === "expense")?.total || 0;
 
     res.json({
@@ -86,10 +89,9 @@ const getSummary = async (req, res) => {
       totalExpense: expense,
       balance: income - expense,
     });
-
   } catch (err) {
     console.error("Get summary error:", err);
-    res.status(500).json({ message: "Server error" });
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
   }
 };
 
