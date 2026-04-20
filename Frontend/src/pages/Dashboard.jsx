@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import API from "../services/api";
 import TransactionForm from "../components/TransactionForm";
 import ExpenseChart from "../components/ExpenseChart";
@@ -12,11 +12,7 @@ function Dashboard() {
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const config = {
         headers: {
@@ -32,7 +28,21 @@ function Dashboard() {
     } catch (err) {
       console.log(err);
     }
-  };
+  },[token]);
+
+  useEffect(() => {
+    if (!token) {
+      navigate("/");
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [fetchData, navigate, token]);
+
 
   const handleDelete = async (id) => {
     try {

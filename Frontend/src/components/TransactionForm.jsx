@@ -25,6 +25,7 @@ function TransactionForm({ onAdd }) {
       setForm({ amount: "", type: "expense", category: "", notes: "" });
 
     } catch (err) {
+      console.error("Failed to add transaction:", err);
       alert("Failed to add transaction");
     }
   };

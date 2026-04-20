@@ -1,6 +1,6 @@
 import { useState } from "react";
 import API from "../services/api";
-import { useNavigate } from "react-router-dom";
+import {Link, useNavigate } from "react-router-dom";
 
 function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -12,6 +12,7 @@ function Login() {
       localStorage.setItem("token", res.data.token);
       navigate("/dashboard");
     } catch (err) {
+      console.error("Login failed:", err);
       alert("Login failed");
     }
   };
@@ -32,6 +33,9 @@ function Login() {
       />
 
       <button onClick={handleLogin}>Login</button>
+       <p>
+        Don't have an account? <Link to="/register">Register</Link>
+      </p>
     </div>
   );
 }

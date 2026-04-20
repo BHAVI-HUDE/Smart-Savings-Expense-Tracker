@@ -1,21 +1,36 @@
 const Transaction = require("../models/Transaction");
+const mongoose = require("mongoose");
 
 // Add
 const addTransaction = async (req, res) => {
   try {
     const { amount, type, category, notes } = req.body;
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ message: "Amount must be a positive number" });
+    }
+
+    if (!["income", "expense"].includes(type)) {
+      return res.status(400).json({ message: "Type must be either income or expense" });
+    }
+
+    if (!category || !String(category).trim()) {
+      return res.status(400).json({ message: "Category is required" });
+    }
 
     const transaction = await Transaction.create({
       userId: req.user,
-      amount,
+      amount: parsedAmount,
       type,
-      category,
+      category: String(category).trim(),
       notes,
     });
 
     res.status(201).json(transaction);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Add transaction error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -27,34 +42,44 @@ const getTransactions = async (req, res) => {
 
     res.json(data);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Get transactions error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
 // Delete
 const deleteTransaction = async (req, res) => {
   try {
-    await Transaction.findByIdAndDelete(req.params.id);
+    const deleted = await Transaction.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
     res.json({ message: "Deleted" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Delete transaction error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
 const getSummary = async (req, res) => {
   try {
-    const transactions = await Transaction.find({ userId: req.user });
+    const totals = await Transaction.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.user) } },
+      {
+        $group: {
+          _id: "$type",
+          total: { $sum: "$amount" },
+        },
+      },
+    ]);
 
-    let income = 0;
-    let expense = 0;
-
-    transactions.forEach((t) => {
-      if (t.type === "income") {
-        income += t.amount;
-      } else {
-        expense += t.amount;
-      }
-    });
+     const income = totals.find((item) => item._id === "income")?.total || 0;
+    const expense = totals.find((item) => item._id === "expense")?.total || 0;
 
     res.json({
       totalIncome: income,
@@ -63,7 +88,8 @@ const getSummary = async (req, res) => {
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Get summary error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
