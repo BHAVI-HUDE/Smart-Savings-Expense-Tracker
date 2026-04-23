@@ -2,6 +2,13 @@ const Transaction = require("../models/Transaction");
 const mongoose = require("mongoose");
 const sendError = require("../utils/sendError");
 
+const parseMonthRange = (month) => {
+  const start = new Date(`${month}-01T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setUTCMonth(end.getUTCMonth() + 1);
+  return { start, end };
+}
+
 const addTransaction = async (req, res) => {
   try {
       const amount = Number(req.body.amount);
@@ -37,12 +44,7 @@ const addTransaction = async (req, res) => {
 
 const getTransactions = async (req, res) => {
   try {
-   const {
-      type,
-      category,
-      from,
-      to,
-    } = req.query;
+    const { type, category, from, to, page = 1, limit = 10, sortBy = "createdAt", sortOrder = "desc" } = req.query;
 
     const filters = { userId: req.user };
 
@@ -76,9 +78,31 @@ const getTransactions = async (req, res) => {
       }
     }
 
-    const data = await Transaction.find(filters).sort({ createdAt: -1 });
+     const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 10));
+    const skip = (safePage - 1) * safeLimit;
 
-    res.json(data);
+    const allowedSorts = ["createdAt", "amount", "category", "type"];
+    const selectedSort = allowedSorts.includes(sortBy) ? sortBy : "createdAt";
+    const selectedOrder = sortOrder === "asc" ? 1 : -1;
+
+     const [data, total] = await Promise.all([
+      Transaction.find(filters)
+        .sort({ [selectedSort]: selectedOrder })
+        .skip(skip)
+        .limit(safeLimit),
+      Transaction.countDocuments(filters),
+    ]);
+
+    res.json({
+      data,
+      meta: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.ceil(total / safeLimit) || 1,
+      },
+    });
   } catch (err) {
     console.error("Get transactions error:", err);
      return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
@@ -183,10 +207,86 @@ const getSummary = async (req, res) => {
   }
 };
 
+const getCategoryTrends = async (req, res) => {
+  try {
+    const month = String(req.query.month || new Date().toISOString().slice(0, 7));
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Month must be YYYY-MM");
+    }
+
+    const { start, end } = parseMonthRange(month);
+
+    const trendData = await Transaction.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(req.user),
+          type: "expense",
+          createdAt: { $gte: start, $lt: end },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            category: "$category",
+            day: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          },
+          total: { $sum: "$amount" },
+        },
+      },
+      { $sort: { "_id.day": 1 } },
+    ]);
+
+    res.json(trendData);
+  } catch (err) {
+    console.error("Get category trends error:", err);
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
+  }
+};
+
+const getCategoryBreakdown = async (req, res) => {
+  try {
+    const month = String(req.query.month || new Date().toISOString().slice(0, 7));
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Month must be YYYY-MM");
+    }
+
+    const { start, end } = parseMonthRange(month);
+
+    const data = await Transaction.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(req.user),
+          type: "expense",
+          createdAt: { $gte: start, $lt: end },
+        },
+      },
+      { $group: { _id: "$category", total: { $sum: "$amount" } } },
+      { $sort: { total: -1 } },
+    ]);
+
+    const grandTotal = data.reduce((sum, item) => sum + item.total, 0);
+    const formatted = data.map((item) => ({
+      category: item._id,
+      total: item.total,
+      share: grandTotal === 0 ? 0 : Number(((item.total / grandTotal) * 100).toFixed(2)),
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error("Get category breakdown error:", err);
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
+  }
+};
+
+
 module.exports = {
   addTransaction,
   getTransactions,
   deleteTransaction,
   updateTransaction,
   getSummary,
+  getCategoryTrends,
+  getCategoryBreakdown,
 };

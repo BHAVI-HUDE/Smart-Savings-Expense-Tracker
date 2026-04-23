@@ -21,6 +21,7 @@ function Register() {
     }
 
     try {
+      setIsSubmitting(true);
       await API.post("/auth/register", form);
       alert("Registration successful. Please login.");
       navigate("/");
