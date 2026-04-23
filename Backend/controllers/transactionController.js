@@ -108,6 +108,55 @@ const deleteTransaction = async (req, res) => {
   }
 };
 
+const updateTransaction = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Invalid transaction id");
+    }
+
+    const amount = Number(req.body.amount);
+    const type = String(req.body.type || "").trim().toLowerCase();
+    const category = String(req.body.category || "").trim();
+    const notes = String(req.body.notes || "").trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Amount must be a positive number");
+    }
+
+    if (!type || !["income", "expense"].includes(type)) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Type must be either income or expense");
+    }
+
+    if (!category) {
+      return sendError(res, 400, "VALIDATION_ERROR", "Category is required");
+    }
+
+    const updatedTransaction = await Transaction.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        userId: req.user,
+      },
+      {
+        amount,
+        type,
+        category,
+        notes,
+      },
+      { new: true }
+    );
+
+    if (!updatedTransaction) {
+      return sendError(res, 404, "TRANSACTION_NOT_FOUND", "Transaction not found");
+    }
+
+    return res.json(updatedTransaction);
+  } catch (err) {
+    console.error("Update transaction error:", err);
+    return sendError(res, 500, "INTERNAL_SERVER_ERROR", "Server error");
+  }
+};
+
+
 const getSummary = async (req, res) => {
   try {
     const totals = await Transaction.aggregate([
@@ -138,5 +187,6 @@ module.exports = {
   addTransaction,
   getTransactions,
   deleteTransaction,
+  updateTransaction,
   getSummary,
 };

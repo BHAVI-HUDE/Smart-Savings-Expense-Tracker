@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const sendError = require("../utils/sendError");
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const registerUser = async (req, res) => {
     try {
@@ -26,7 +27,9 @@ const registerUser = async (req, res) => {
       return sendError(res, 400, "VALIDATION_ERROR", "Password must be at least 8 characters");
     }
 
-    const userExists = await User.findOne({ email });
+     const userExists = await User.findOne({
+      email: new RegExp(`^${escapeRegex(email)}$`, "i"),
+    });
     if (userExists) {
       return sendError(res, 409, "USER_EXISTS", "User already exists");
     }
@@ -66,7 +69,9 @@ const loginUser = async (req, res) => {
       return sendError(res, 400, "VALIDATION_ERROR", "Invalid email format");
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({
+      email: new RegExp(`^${escapeRegex(email)}$`, "i"),
+    });
     if (!user) {
       return sendError(res, 401, "INVALID_CREDENTIALS", "Invalid credentials");
     }
@@ -74,6 +79,11 @@ const loginUser = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return sendError(res, 401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+
+    if (user.email !== email) {
+      user.email = email;
+      await user.save();
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
